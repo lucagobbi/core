@@ -93,6 +93,38 @@ def before_cat_reads_message(user_message_json: dict, cat) -> dict:
     """
     return user_message_json
 
+@hook(priority=0)
+def fast_reply(reply: dict, cat) -> None | dict:
+    """Hook to shortcut the Cat response.
+
+    Parameters
+    ----------
+    reply: dict
+        Input is dict (initially empty), which can be enriched with an "output" key with the shortcut response.
+    cat: CheshireCat
+        Cheshire Cat instance.
+
+    Returns
+    --------
+    response: dict | None
+        To allow the current flow to continue, return "None" or an empty dictionary "{}". If you wish to stop the current flow, populate the dictionary.
+        See below for examples of Cat response
+
+    Examples
+    --------
+
+    Example 1: prevent inappropriate content
+
+    ```python
+    # here you could use a moderation API to evaluate content
+    if moderation_response["flagged"]:
+        return {
+            "output": "Be gentle, dude!"
+        }
+    ```
+    """
+    return reply
+
 
 # What is the input to recall memories?
 # Here you can do HyDE embedding, condense recent conversation or condition recall query on something else important to your AI

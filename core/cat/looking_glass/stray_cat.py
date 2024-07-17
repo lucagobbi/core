@@ -308,8 +308,6 @@ class StrayCat:
         ----------
         message_dict : dict
             Dictionary received from the Websocket client.
-        save : bool, optional
-            If True, the user's message is stored in the chat history. Default is True.
 
         Returns
         -------
@@ -346,6 +344,17 @@ class StrayCat:
         self.working_memory.update_conversation_history(
             who="Human", message=user_message_text
         )
+
+        # fast_reply hook
+        fast_reply = self.mad_hatter.execute_hook(
+            "fast_reply", {}, cat=self
+        )
+        if "output" in fast_reply:
+            self.__store_user_message_in_episodic_memory(user_message_text)
+            why = self.__build_why()
+            return CatMessage(
+                user_id=self.user_id, content=str(fast_reply["output"]), why=why
+            )
 
         # recall episodic and declarative memories from vector collections
         #   and store them in working_memory
@@ -390,22 +399,8 @@ class StrayCat:
         log.info("Agent output returned to stray:")
         log.info(agent_output)
 
-        doc = Document(
-            page_content=user_message_text,
-            metadata={"source": self.user_id, "when": time.time()},
-        )
-        doc = self.mad_hatter.execute_hook(
-            "before_cat_stores_episodic_memory", doc, cat=self
-        )
         # store user message in episodic memory
-        # TODO: vectorize and store also conversation chunks
-        #   (not raw dialog, but summarization)
-        user_message_embedding = self.embedder.embed_documents([user_message_text])
-        _ = self.memory.vectors.episodic.add_point(
-            doc.page_content,
-            user_message_embedding[0],
-            doc.metadata,
-        )
+        self.__store_user_message_in_episodic_memory(user_message_text)
 
         # why this response?
         why = self.__build_why()
@@ -427,6 +422,20 @@ class StrayCat:
         )
 
         return final_output
+
+    def __store_user_message_in_episodic_memory(self, user_message_text):
+        doc = Document(
+            page_content=user_message_text,
+            metadata={"source": self.user_id, "when": time.time()},
+        )
+        # TODO: vectorize and store also conversation chunks
+        #   (not raw dialog, but summarization)
+        user_message_embedding = self.embedder.embed_documents([user_message_text])
+        _ = self.memory.vectors.episodic.add_point(
+            doc.page_content,
+            user_message_embedding[0],
+            doc.metadata,
+        )
 
     def run(self, user_message_json):
         try:
