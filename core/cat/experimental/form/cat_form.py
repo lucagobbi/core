@@ -29,11 +29,10 @@ class CatForm:  # base model of forms
     def __init__(self, cat) -> None:
         self._state = CatFormState.INCOMPLETE
         self._model: Dict = {}
-
         self._cat = cat
-
         self._errors: List[str] = []
         self._missing_fields: List[str] = []
+        self.model_class = self.model_getter()  # Initialize model_class using model_getter
 
     @property
     def cat(self):
@@ -218,8 +217,9 @@ JSON:
 
         # JSON structure
         # BaseModel.__fields__['my_field'].type_
+        model_class = self.model_getter()
         JSON_structure = "{"
-        for field_name, field in self.model_class.model_fields.items():
+        for field_name, field in model_class.model_fields.items():
             if field.description:
                 description = field.description
             else:
@@ -265,12 +265,8 @@ Updated JSON:
         self._errors = []
 
         try:
-            # INFO TODO: In this case the optional fields are always ignored
-
-            # Attempts to create the model object to update the default values and validate it
-            model = self.model_class(**model).model_dump(mode="json")
-
-            # If model is valid change state to COMPLETE
+            model_class = self.model_getter()
+            model = model_class(**model).model_dump(mode="json")
             self._state = CatFormState.COMPLETE
 
         except ValidationError as e:
@@ -287,3 +283,10 @@ Updated JSON:
             self._state = CatFormState.INCOMPLETE
 
         return model
+
+    def model_getter(self) -> BaseModel:
+        """
+        Override this method to provide a custom Pydantic model or schema.
+        By default, it returns the class-level model_class.
+        """
+        return self.model_class
