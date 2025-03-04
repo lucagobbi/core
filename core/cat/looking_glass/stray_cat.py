@@ -89,33 +89,26 @@ class StrayCat:
             app.state.event_loop,
         ).result()
 
-    def __build_why(self) -> MessageWhy:
+    def __build_why(self, agent_output: AgentOutput = None) -> MessageWhy:
         # build data structure for output (response and why with memories)
-        # TODO: these 3 lines are a mess, simplify
-        episodic_report = [
-            dict(d[0]) | {"score": float(d[1]), "id": d[3]}
-            for d in self.working_memory.episodic_memories
-        ]
-        declarative_report = [
-            dict(d[0]) | {"score": float(d[1]), "id": d[3]}
-            for d in self.working_memory.declarative_memories
-        ]
-        procedural_report = [
-            dict(d[0]) | {"score": float(d[1]), "id": d[3]}
-            for d in self.working_memory.procedural_memories
-        ]
+        def format_memories(memories):
+            return [dict(m[0]) | {"score": float(m[1]), "id": m[3]} for m in memories]
 
         # why this response?
         why = MessageWhy(
             input=self.working_memory.user_message_json.text,
             intermediate_steps=[],
             memory={
-                "episodic": episodic_report,
-                "declarative": declarative_report,
-                "procedural": procedural_report,
+                "episodic": format_memories(self.working_memory.episodic_memories),
+                "declarative": format_memories(self.working_memory.declarative_memories),
+                "procedural": format_memories(self.working_memory.procedural_memories),
             },
             model_interactions=self.working_memory.model_interactions,
         )
+
+        if agent_output:
+            why.intermediate_steps = agent_output.intermediate_steps
+            why.agent_output = agent_output.model_dump()
 
         return why
     
@@ -528,21 +521,18 @@ class StrayCat:
             self.working_memory.user_message_json.text
         )
 
-        # why this response?
-        why = self.__build_why()
-        # TODO: should these assignations be included in self.__build_why ?
-        why.intermediate_steps = agent_output.intermediate_steps
-        why.agent_output = agent_output.model_dump()
-
         # prepare final cat message
         final_output = CatMessage(
-            user_id=self.user_id, text=str(agent_output.output), why=why
+            user_id=self.user_id, text=str(agent_output.output)
         )
 
         # run message through plugins
         final_output = self.mad_hatter.execute_hook(
             "before_cat_sends_message", final_output, cat=self
         )
+
+        # why this response?
+        final_output.why = self.__build_why(agent_output)
 
         # update conversation history (AI turn)
         self.working_memory.update_history(
